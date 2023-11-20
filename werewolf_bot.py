@@ -27,6 +27,7 @@ async def on_ready():
 async def test(ctx):
     await ctx.send('Masuk')
 
+
 @bot.command()
 async def play(ctx):
     global state
@@ -58,13 +59,17 @@ async def play(ctx):
                 reaction, user = finished.result()
                 if user not in users:
                     users.append(user)
-                    await ctx.send(f'{user} telah bergabung ke dalam permainan')
+                    await ctx.send(f'({len(users)}/5) {user} telah bergabung ke dalam permainan')
             elif finished.get_name() == 'r_rem':
                 reaction, user = finished.result()
                 if user in users:
                     users.remove(user)
-                    await ctx.send(f'{user} telah meninggalkan permainan')
+                    await ctx.send(f'({len(users)}/5) {user} telah meninggalkan permainan')
         await ctx.send('Pemain berjumlah 5 orang. Ketik `!start` untuk memulai permainan.')
+        await ctx.send('```' + 'List Pemain:\n\n' + '\n'.join([str(user) for user in users]) + '```')
         state = 'ready to play'
 
+
+@bot.command()
+async def start(ctx):
 bot.run(BOT_TOKEN)
