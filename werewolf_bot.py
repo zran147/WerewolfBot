@@ -217,10 +217,12 @@ async def start(ctx):
                 elif wolf_choice[0].result() == guard_choice[0].result():
                     hasil = 'Bodyguard telah berhasil menyelamatkan seseorang'
                 else:
+                    emoji_to_player[wolf_choice[0].result()].alive = False
                     await emoji_to_player[wolf_choice[0].result()].user.add_roles(dead_role)
                     await emoji_to_player[wolf_choice[0].result()].user.timeout(timedelta(days=1))
                     hasil = f'{emoji_to_player[wolf_choice[0].result()].user.display_name} telah dibunuh'
             else:
+                emoji_to_player[wolf_choice[0].result()].alive = False
                 await emoji_to_player[wolf_choice[0].result()].user.timeout(timedelta(days=1))
                 await emoji_to_player[wolf_choice[0].result()].user.add_roles(dead_role)
                 hasil = f'{emoji_to_player[wolf_choice[0].result()].user.display_name} telah dibunuh'
