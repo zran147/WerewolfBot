@@ -138,7 +138,6 @@ async def start(ctx):
         #await guild.edit_role_positions(positions={role: 10, dead_role:9})
 
         await channel.purge()
-        await channel.set_permissions(guild.default_role, read_messages=False)
         await channel.set_permissions(role, read_messages=True, send_messages=False, add_reactions=False)
         await channel.set_permissions(dead_role, read_messages=True, send_messages=False, add_reactions=False)
         for user in users:
@@ -160,6 +159,7 @@ async def start(ctx):
                     werewolf = player
                 case 'bodyguard':
                     guard = player
+        await channel.set_permissions(guild.default_role, read_messages=False)
 
         embed = discord.Embed(
             title='Players',
