@@ -1,4 +1,5 @@
 from discord.ext import commands
+from datetime import timedelta
 import discord
 import asyncio
 import random
@@ -23,7 +24,6 @@ testing = False
 roles = ['werewolf', 'seer', 'bodyguard', 'villager', 'lycan']
 emojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣']
 emoji_to_player = {}
-werewolves = []
 
 
 def escape(message):
@@ -33,13 +33,11 @@ def escape(message):
 
 @bot.event
 async def on_reaction_add(reaction, user):
-    channel = reaction.message.channel
-    if user.id != bot.user.id:
+    if user.id != bot.user.id and reaction.emoji in emojis:
         cache_msg = discord.utils.get(bot.cached_messages, id=reaction.message.id)
 
         for r in cache_msg.reactions:
             if user in [user async for user in r.users()] and not user.bot and str(r) != str(reaction.emoji):
-                # Remove their previous reaction
                 await cache_msg.remove_reaction(r.emoji, user)
 
 
@@ -76,7 +74,7 @@ async def play(ctx, arg=''):
         #poll = await ctx.send('Berikan reaksi ☝️ untuk mengikuti permainan')
         await poll.add_reaction('☝️')
 
-        check = lambda r, u: r.emoji == '☝️' and not u.bot
+        check = lambda r, u: r.message == poll and r.emoji == '☝️' and not u.bot
         if testing:
             user = ctx.author
             for _ in range(5-len(users)):
@@ -103,12 +101,12 @@ async def play(ctx, arg=''):
                 reaction, user = finished.result()
                 if user not in users:
                     users.append(user)
-                    await ctx.send(f'({len(users)}/5) {user} telah bergabung ke dalam permainan')
+                    await ctx.send(f'({len(users)}/5) {user.display_name} telah bergabung ke dalam permainan')
             elif finished.get_name() == 'r_rem':
                 reaction, user = finished.result()
                 if user in users:
                     users.remove(user)
-                    await ctx.send(f'({len(users)}/5) {user} telah meninggalkan permainan')
+                    await ctx.send(f'({len(users)}/5) {user.display_name} telah meninggalkan permainan')
         embed = discord.Embed(
             title='List Pemain:',
             description='\n'.join([escape(user.display_name) for user in users]),
@@ -123,23 +121,29 @@ async def play(ctx, arg=''):
 async def start(ctx):
     global state
     if state == 'ready to play':
-        global playing, channel, players, emoji_to_player, users, isGameEnded, emoji, killed, roles, seer, werewolves, guard
+        state = 'playing'
+        global channel, players, emoji_to_player, users, isGameEnded, emoji, killed, roles, seer, werewolf, guard
         
-        playing = True
         guild = ctx.guild
         channel = discord.utils.get(guild.channels, name='werewolf')
         role = discord.utils.get(guild.roles, name='Playing Werewolf')
+        dead_role = discord.utils.get(guild.roles, name='dead')
 
         if not channel:
             channel = await guild.create_text_channel('werewolf')
         if not role:
             role = await guild.create_role(name='Playing Werewolf')
+        if not dead_role:
+            dead_role = await guild.create_role(name='dead')
+        #await guild.edit_role_positions(positions={role: 10, dead_role:9})
 
         await channel.purge()
         await channel.set_permissions(guild.default_role, read_messages=False)
-        await channel.set_permissions(role, read_messages=True, send_messages=False)
+        await channel.set_permissions(role, read_messages=True, send_messages=False, add_reactions=False)
+        await channel.set_permissions(dead_role, read_messages=True, send_messages=False, add_reactions=False)
         for user in users:
             await user.add_roles(role)
+            await user.remove_roles(dead_role)
             player = Player(user, await draw(user), emojis[len(players)])
             dm = await user.create_dm()
             embed = discord.Embed(
@@ -153,7 +157,7 @@ async def start(ctx):
                 case 'seer':
                     seer = player
                 case 'werewolf':
-                    werewolves.append(player)
+                    werewolf = player
                 case 'bodyguard':
                     guard = player
 
@@ -173,27 +177,82 @@ async def start(ctx):
         )
         await channel.send(embed=embed)
         if seer.alive:
-            await asyncio.wait([asyncio.create_task(seerTurn(channel))], timeout=30)
+            _, pending = await asyncio.wait([asyncio.create_task(seerTurn(channel))], timeout=30)
+            for task in pending:
+                try:
+                    task.cancel()
+                except asyncio.CancelledError:
+                    pass
 
+        hasil = ''
         hari = 1
-        while playing:
-            await diskusi(channel, hari, role)
+        while state == 'playing':
+            await diskusi(channel, hari, role, dead_role, hasil)
+            if (message := checkGameState()) is not None:
+                break
             embed = discord.Embed(
                 description='Malam telah tiba\nSeer, werewolf, dan bodyguard silakan bangun',
                 color=discord.Color.blue()
             )
             await channel.send(embed=embed)
             await asyncio.sleep(5)
-            await asyncio.wait([
-                    asyncio.create_task(wolfTurn(channel)),
-                    asyncio.create_task(seerTurn(channel)),
-                    asyncio.create_task(guardTurn(channel))
-                ], timeout=30
-            )
+            tasks = [asyncio.create_task(wolfTurn(channel), name='wolf')]
+            if seer.alive:
+                tasks.append(asyncio.create_task(seerTurn(channel)))
+            if guard.alive:
+                tasks.append(asyncio.create_task(guardTurn(channel), name='guard'))
+            done, pending = await asyncio.wait(tasks, timeout=30)
+            for task in pending:
+                try:
+                    task.cancel()
+                except asyncio.CancelledError:
+                    pass
+            if guard.alive:
+                wolf_choice = [task for task in done if task.get_name() == 'wolf']
+                guard_choice = [task for task in done if task.get_name() == 'guard']
+                if len(wolf_choice) == 0:
+                    hasil = 'Tidak ada yang dibunuh'
+                elif len(guard_choice) == 0:
+                    hasil = f'{wolf_choice[0].result()} telah dibunuh'
+                elif wolf_choice[0].result() == guard_choice[0].result():
+                    hasil = 'Bodyguard telah berhasil menyelamatkan seseorang'
+                else:
+                    await emoji_to_player[wolf_choice[0]].user.add_roles(dead_role)
+                    await emoji_to_player[wolf_choice[0]].user.timeout(timedelta(days=1))
+                    hasil = f'{wolf_choice[0].result()} telah dibunuh'
+            else:
+                await emoji_to_player[wolf_choice[0]].user.add_roles(dead_role)
+                await emoji_to_player[wolf_choice[0]].user.timeout(timedelta(days=1))
+                hasil = f'{wolf_choice[0].result()} telah dibunuh'
+            if (message := checkGameState()) is not None:
+                break
             hari += 1
+        embed = discord.Embed(
+            title=message,
+            description='Channel ini akan ditutup 20 detik lagi',
+            color=discord.Color.blue()
+        )
+        await channel.send(embed=embed)
+        for player in players:
+            await player.user.remove_roles(dead_role)
+            await player.user.timeout(None)
+        await channel.set_permissions(role, read_messages=True, send_messages=True)
+        await asyncio.sleep(20)
+        for player in players:
+            await player.user.remove_roles(role)
+        state = 'not playing'
+        await channel.set_permissions(guild.default_role, read_messages=True, send_messages=False, add_reactions=False)
 
 
-async def diskusi(channel, hari, role):
+def checkGameState():
+    global werewolf, players
+    if not werewolf.alive:
+        return 'Selamat, Manusia menang!'
+    elif len([player for player in players if player.alive]) == 2:
+        return 'Selamat, Werewolf menang!'
+
+
+async def diskusi(channel, hari, role, dead_role, hasil):
     global players, emoji_to_player
 
     embed = discord.Embed(
@@ -201,8 +260,10 @@ async def diskusi(channel, hari, role):
         description='Pagi telah tiba, silakan berdiskusi selama 2 menit',
         color=discord.Color.blue()
     )
+    if hasil != '':
+        embed.add_field(name='Berita', value=hasil)
     await channel.send(embed=embed)
-    await channel.set_permissions(role, read_messages=True, send_messages=True)
+    await channel.set_permissions(role, read_messages=True, send_messages=True, attach_files=False, create_private_threads=False, create_public_threads=False)
 
     if not testing:
         await asyncio.sleep(60)
@@ -222,9 +283,10 @@ async def diskusi(channel, hari, role):
 
     if not testing:
         await asyncio.sleep(10)
-    await channel.set_permissions(role, read_messages=True, send_messages=False)
+    await channel.set_permissions(role, read_messages=True, send_messages=False, add_reactions=False)
     embed = discord.Embed(
-        description='Waktu diskusi habis. Silakan melakukan voting dengan memberikan reaksi',
+        title='Waktu diskusi habis',
+        description='Silakan melakukan voting dengan memberikan reaksi\n' + '\n'.join(f'{emoji} {name}' for emoji, name in zip((player.emoji for player in players if player.alive), (player.user.display_name for player in players if player.alive))),
         color=discord.Color.blue()
     )
     poll = await channel.send(embed=embed)
@@ -242,10 +304,13 @@ async def diskusi(channel, hari, role):
     await channel.send(embed=embed)
     await asyncio.sleep(10)
     poll = discord.utils.get(bot.cached_messages, id=poll.id)
-    votes = {reaction.emoji: reaction.count-1 for reaction in poll.reactions}
+    votes = {reaction.emoji: reaction.count-1 for reaction in poll.reactions if reaction.emoji in emojis}
 
     hasil = None if (terurut := (sorted(votes.items(), key=lambda item: item[1])[::-1]))[0][1] == terurut[1][1] else terurut[0][0]
     if hasil != None:
+        emoji_to_player[hasil].alive = False
+        await emoji_to_player[hasil].user.add_roles(dead_role)
+        await emoji_to_player[hasil].user.timeout(timedelta(days=1))
         hasil = f'{emoji_to_player[hasil].emoji} akan dibunuh'
     else:
         hasil = 'Tidak akan ada yang dibunuh'
@@ -274,7 +339,7 @@ async def seerTurn(channel):
             players_emo.append(player.emoji)
             await poll.add_reaction(player.emoji)
     
-    reaction, _ = await bot.wait_for('reaction_add', check = lambda r, u: str(r.emoji) in players_emo and not u.bot)
+    reaction, _ = await bot.wait_for('reaction_add', check = lambda r, u: r.message == poll and str(r.emoji) in players_emo and not u.bot)
 
     chosen_player = emoji_to_player[str(reaction.emoji)]
 
@@ -290,18 +355,64 @@ async def seerTurn(channel):
 
 
 async def wolfTurn(channel):
-    global werewolves
+    global werewolf, emoji_to_player
+    dm = await werewolf.user.create_dm()
+    embed = discord.Embed(
+        description='Pilih siapa yang ingin kamu bunuh dengan bereaksi pada pesan ini',
+        color=discord.Color.blue()
+    )
+    poll = await dm.send(embed=embed)
+
+    players_emo = []
+    for player in players:
+        if player.role != 'werewolf' and player.alive:
+            players_emo.append(player.emoji)
+            await poll.add_reaction(player.emoji)
+    
+    reaction, _ = await bot.wait_for('reaction_add', check = lambda r, u: r.message == poll and str(r.emoji) in players_emo and not u.bot)
+
+    chosen_player = emoji_to_player[str(reaction.emoji)]
+
+    if chosen_player == None:
+        await channel.send("Tidak ada pemain tersebut dalam game ini")
+
+    embed = discord.Embed(description=f'Kamu memilih {reaction.emoji}', color=discord.Color.blue())
+    await dm.send(embed=embed)
+    return reaction.emoji
 
 
 async def guardTurn(channel):
-    global guard
+    global guard, emoji_to_player
+    dm = await guard.user.create_dm()
+    embed = discord.Embed(
+        description='Pilih siapa yang ingin kamu selamatkan dengan bereaksi pada pesan ini',
+        color=discord.Color.blue()
+    )
+    poll = await dm.send(embed=embed)
+
+    players_emo = []
+    for player in players:
+        if player.alive:
+            players_emo.append(player.emoji)
+            await poll.add_reaction(player.emoji)
+    
+    reaction, _ = await bot.wait_for('reaction_add', check = lambda r, u: r.message == poll and str(r.emoji) in players_emo and not u.bot)
+
+    chosen_player = emoji_to_player[str(reaction.emoji)]
+
+    if chosen_player == None:
+        await channel.send("Tidak ada pemain tersebut dalam game ini")
+
+    embed = discord.Embed(description=f'Kamu memilih {reaction.emoji}', color=discord.Color.blue())
+    await dm.send(embed=embed)
+    return reaction.emoji
 
 
 async def draw(user):
     global roles
     role = random.choice(roles)
     roles.remove(role)
-    print(f"assigned {user} {roles}")
+    print(f"assigned {user} {role}")
     return role
 
 
