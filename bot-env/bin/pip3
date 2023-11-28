@@ -1,5 +1,5 @@
 #!/bin/sh
-'''exec' "/home/zran/Documents/Semester 5/ai/WerewolfBot/bot-env/bin/python3" "$0" "$@"
+'''exec' "$(pwd)/bot-env/bin/python3" "$0" "$@"
 ' '''
 # -*- coding: utf-8 -*-
 import re
