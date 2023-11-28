@@ -213,17 +213,17 @@ async def start(ctx):
                 if len(wolf_choice) == 0:
                     hasil = 'Tidak ada yang dibunuh'
                 elif len(guard_choice) == 0:
-                    hasil = f'{wolf_choice[0].result()} telah dibunuh'
+                    hasil = f'{emoji_to_player[wolf_choice[0].result()].user.display_name} telah dibunuh'
                 elif wolf_choice[0].result() == guard_choice[0].result():
                     hasil = 'Bodyguard telah berhasil menyelamatkan seseorang'
                 else:
-                    await emoji_to_player[wolf_choice[0]].user.add_roles(dead_role)
-                    await emoji_to_player[wolf_choice[0]].user.timeout(timedelta(days=1))
-                    hasil = f'{wolf_choice[0].result()} telah dibunuh'
+                    await emoji_to_player[wolf_choice[0].result()].user.add_roles(dead_role)
+                    await emoji_to_player[wolf_choice[0].result()].user.timeout(timedelta(days=1))
+                    hasil = f'{emoji_to_player[wolf_choice[0].result()].user.display_name} telah dibunuh'
             else:
-                await emoji_to_player[wolf_choice[0]].user.add_roles(dead_role)
-                await emoji_to_player[wolf_choice[0]].user.timeout(timedelta(days=1))
-                hasil = f'{wolf_choice[0].result()} telah dibunuh'
+                await emoji_to_player[wolf_choice[0].result()].user.timeout(timedelta(days=1))
+                await emoji_to_player[wolf_choice[0].result()].user.add_roles(dead_role)
+                hasil = f'{emoji_to_player[wolf_choice[0].result()].user.display_name} telah dibunuh'
             if (message := checkGameState()) is not None:
                 break
             hari += 1
@@ -251,7 +251,7 @@ async def start(ctx):
 def checkGameState():
     global werewolf, players
     if not werewolf.alive:
-        return 'Selamat, Manusia menang!'
+        return 'Selamat, Penduduk menang!'
     elif len([player for player in players if player.alive]) == 2:
         return 'Selamat, Werewolf menang!'
 
@@ -315,7 +315,7 @@ async def diskusi(channel, hari, role, dead_role, hasil):
         emoji_to_player[hasil].alive = False
         await emoji_to_player[hasil].user.add_roles(dead_role)
         await emoji_to_player[hasil].user.timeout(timedelta(days=1))
-        hasil = f'{emoji_to_player[hasil].emoji} akan dibunuh'
+        hasil = f'{emoji_to_player[hasil].user.display_name} akan ditendang dari desa'
     else:
         hasil = 'Tidak akan ada yang dibunuh'
 
@@ -351,9 +351,9 @@ async def seerTurn(channel):
         await channel.send("Tidak ada pemain tersebut dalam game ini")
 
     if chosen_player.role == 'werewolf' or chosen_player.role == 'lycan':
-        role_msg = f"{reaction.emoji}   adalah orang jahat"
+        role_msg = f"{chosen_player.user.display_name}   adalah orang jahat"
     else:
-        role_msg = f"{reaction.emoji}   adalah orang baik"
+        role_msg = f"{chosen_player.user.display_name}   adalah orang baik"
     embed = discord.Embed(description=role_msg, color=discord.Color.blue())
     await dm.send(embed=embed)
 
@@ -380,7 +380,7 @@ async def wolfTurn(channel):
     if chosen_player == None:
         await channel.send("Tidak ada pemain tersebut dalam game ini")
 
-    embed = discord.Embed(description=f'Kamu memilih {reaction.emoji}', color=discord.Color.blue())
+    embed = discord.Embed(description=f'Kamu memilih {emoji_to_player[reaction.emoji].user.display_name}', color=discord.Color.blue())
     await dm.send(embed=embed)
     return reaction.emoji
 
@@ -407,7 +407,7 @@ async def guardTurn(channel):
     if chosen_player == None:
         await channel.send("Tidak ada pemain tersebut dalam game ini")
 
-    embed = discord.Embed(description=f'Kamu memilih {reaction.emoji}', color=discord.Color.blue())
+    embed = discord.Embed(description=f'Kamu memilih {emoji_to_player[reaction.emoji].user.display_name}', color=discord.Color.blue())
     await dm.send(embed=embed)
     return reaction.emoji
 
