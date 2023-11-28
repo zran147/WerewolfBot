@@ -122,7 +122,7 @@ async def start(ctx):
     global state
     if state == 'ready to play':
         state = 'playing'
-        global channel, players, emoji_to_player, users, isGameEnded, emoji, killed, roles, seer, werewolf, guard
+        global testing, channel, players, emoji_to_player, users, isGameEnded, emoji, killed, roles, seer, werewolf, guard
         
         guild = ctx.guild
         channel = discord.utils.get(guild.channels, name='werewolf')
