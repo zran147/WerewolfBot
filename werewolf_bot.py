@@ -240,6 +240,10 @@ async def start(ctx):
         await asyncio.sleep(20)
         for player in players:
             await player.user.remove_roles(role)
+        users.clear()
+        players.clear()
+        emoji_to_player.clear()
+        testing = False
         state = 'not playing'
         await channel.set_permissions(guild.default_role, read_messages=True, send_messages=False, add_reactions=False)
 
