@@ -247,6 +247,7 @@ async def start(ctx):
         players.clear()
         emoji_to_player.clear()
         testing = False
+        roles = ['werewolf', 'seer', 'bodyguard', 'villager', 'lycan']
         state = 'not playing'
         await channel.set_permissions(guild.default_role, read_messages=True, send_messages=False, add_reactions=False)
 
