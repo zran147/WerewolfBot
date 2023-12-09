@@ -31,17 +31,31 @@ def escape(message):
     return message
 
 
-@bot.event
-async def on_reaction_add(reaction, user):
-    if user.id != bot.user.id and reaction.emoji in emojis:
-        cache_msg = discord.utils.get(bot.cached_messages, id=reaction.message.id)
+async def peringatan(channel, total, ketika_sisa, testing=False):
+    if not testing:
+        await asyncio.sleep(total - ketika_sisa)
+    embed = discord.Embed(
+        description=f'Waktu diskusi tersisa {ketika_sisa} detik',
+        color=discord.Color.blue()
+    )
+    await channel.send(embed=embed)
 
-        for r in cache_msg.reactions:
-            if user in [user async for user in r.users()] and not user.bot and str(r) != str(reaction.emoji):
-                try:
+
+async def voting(message):
+    while True:
+        done, pending = await asyncio.wait([asyncio.create_task(bot.wait_for('reaction_add'))])
+        for task in pending:
+            try:
+                task.cancel()
+            except asyncio.CancelledError:
+                pass
+        reaction, user = list(done)[0].result()
+        if reaction.emoji in emojis:
+            cache_msg = discord.utils.get(bot.cached_messages, id=reaction.message.id)
+
+            for r in cache_msg.reactions:
+                if user in [user async for user in r.users()] and not user.bot and str(r) != str(reaction.emoji):
                     await cache_msg.remove_reaction(r.emoji, user)
-                except:
-                    pass
 
 
 @bot.event
@@ -170,7 +184,15 @@ async def start(ctx):
             color=discord.Color.blue()
         )
         embed.add_field(name='Perhatian', value='Permainan akan dimulai dalam 10 detik')
-        await channel.send(embed=embed)
+        dm_seer = await seer.user.create_dm()
+        dm_wolf = await werewolf.user.create_dm()
+        dm_guard = await guard.user.create_dm()
+        await asyncio.wait([
+            asyncio.create_task(channel.send(embed=embed)),
+            asyncio.create_task(dm_seer.send(embed=embed)),
+            asyncio.create_task(dm_wolf.send(embed=embed)),
+            asyncio.create_task(dm_guard.send(embed=embed))
+        ])
         if not testing:
             await asyncio.sleep(10)
 
@@ -210,12 +232,12 @@ async def start(ctx):
                     task.cancel()
                 except asyncio.CancelledError:
                     pass
-            if guard.alive:
-                wolf_choice = [task for task in done if task.get_name() == 'wolf']
+            wolf_choice = [task for task in done if task.get_name() == 'wolf']
+            if len(wolf_choice) == 0:
+                hasil = 'Tidak ada yang dibunuh'
+            elif guard.alive:
                 guard_choice = [task for task in done if task.get_name() == 'guard']
-                if len(wolf_choice) == 0:
-                    hasil = 'Tidak ada yang dibunuh'
-                elif len(guard_choice) == 0:
+                if len(guard_choice) == 0:
                     hasil = f'{emoji_to_player[wolf_choice[0].result()].user.display_name} telah dibunuh'
                 elif wolf_choice[0].result() == guard_choice[0].result():
                     hasil = 'Bodyguard telah berhasil menyelamatkan seseorang'
@@ -225,7 +247,6 @@ async def start(ctx):
                     await emoji_to_player[wolf_choice[0].result()].user.timeout(timedelta(days=1))
                     hasil = f'{emoji_to_player[wolf_choice[0].result()].user.display_name} telah dibunuh'
             else:
-                wolf_choice = [task for task in done if task.get_name() == 'wolf']
                 emoji_to_player[wolf_choice[0].result()].alive = False
                 await emoji_to_player[wolf_choice[0].result()].user.timeout(timedelta(days=1))
                 await emoji_to_player[wolf_choice[0].result()].user.add_roles(dead_role)
@@ -306,14 +327,17 @@ async def diskusi(channel, hari, role, dead_role, hasil):
         if player.alive:
             await poll.add_reaction(player.emoji)
 
-    await asyncio.sleep(20)
+    #await asyncio.sleep(20)
 
-    embed = discord.Embed(
-        description='Waktu voting tersisa 10 detik',
-        color=discord.Color.blue()
-    )
-    await channel.send(embed=embed)
-    await asyncio.sleep(10)
+    #embed = discord.Embed(
+    #    description='Waktu voting tersisa 10 detik',
+    #    color=discord.Color.blue()
+    #)
+    #await channel.send(embed=embed)
+    #await asyncio.sleep(10)
+
+    await asyncio.wait([asyncio.create_task(voting(poll)), asyncio.create_task(peringatan(channel, 30, 10))], timeout=30)
+
     poll = discord.utils.get(bot.cached_messages, id=poll.id)
     votes = {reaction.emoji: reaction.count-1 for reaction in poll.reactions if reaction.emoji in emojis}
 
