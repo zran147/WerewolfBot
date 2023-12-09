@@ -38,7 +38,10 @@ async def on_reaction_add(reaction, user):
 
         for r in cache_msg.reactions:
             if user in [user async for user in r.users()] and not user.bot and str(r) != str(reaction.emoji):
-                await cache_msg.remove_reaction(r.emoji, user)
+                try:
+                    await cache_msg.remove_reaction(r.emoji, user)
+                except:
+                    pass
 
 
 @bot.event
