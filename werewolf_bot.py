@@ -222,6 +222,7 @@ async def start(ctx):
                     await emoji_to_player[wolf_choice[0].result()].user.timeout(timedelta(days=1))
                     hasil = f'{emoji_to_player[wolf_choice[0].result()].user.display_name} telah dibunuh'
             else:
+                wolf_choice = [task for task in done if task.get_name() == 'wolf']
                 emoji_to_player[wolf_choice[0].result()].alive = False
                 await emoji_to_player[wolf_choice[0].result()].user.timeout(timedelta(days=1))
                 await emoji_to_player[wolf_choice[0].result()].user.add_roles(dead_role)
