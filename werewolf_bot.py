@@ -7,7 +7,7 @@ import functools
 import typing
 
 BOT_TOKEN = open('token.txt', 'r').read().strip()
-CHANNEL_ID = 1174972462367260675
+CHANNEL_ID = 1183586585388777574
 
 class Player:
     def __init__(self, user, role=None, emoji=None, alive=True):
