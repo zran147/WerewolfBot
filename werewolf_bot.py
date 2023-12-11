@@ -74,8 +74,11 @@ async def clear_dm(ctx):
     dm = await ctx.author.create_dm()
     async for message in dm.history():
         if message.author == bot.user:
-            await asyncio.create_task(message.delete())
-            await asyncio.sleep(0.21)
+            try:
+                await asyncio.create_task(message.delete())
+                await asyncio.sleep(0.21)
+            except:
+                pass
 
 
 @bot.command()
@@ -467,4 +470,5 @@ async def draw(user):
     return role
 
 
-bot.run(BOT_TOKEN)
+if __name__ == '__main__':
+    bot.run(BOT_TOKEN)
